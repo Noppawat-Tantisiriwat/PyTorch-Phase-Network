@@ -1,0 +1,13 @@
+numpy==1.26.4
+torch==2.2.2
+torchaudio==2.2.0.dev20240206
+torchvision==0.18.0.dev20240206
+torchviz==0.0.2
+pandas==1.5.3
+tqdm==4.66.1
+sklearn==0.0
+openpyxl==3.1.2
+matplotlib==3.8.2
+matplotlib-inline==0.1.6
+seaborn==0.13.2
+einops==0.8.0
