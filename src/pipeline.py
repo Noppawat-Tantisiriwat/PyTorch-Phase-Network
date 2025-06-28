@@ -145,7 +145,7 @@ class WindowSlidingWithHeadingRegression():
 
         m = x.shape[1]
 
-        allPose = x[:, self.regressWing + self.regressWing: m]
+        allPose = x[..., self.regressWing + self.regressWing: m]
 
         allHead, _ = self.regressor(x)
 
@@ -359,6 +359,14 @@ class GaitPhasingDataset():
             save_path=self.data_root,
             return_all_data=True
         )
+
+        _, self.data_label_img, _,_ = GaitPhasingDataset.get_session_label(
+            data_dir=self.img_dir, 
+            end_session_plus_one_path=self.end_session_plus_one_path, 
+            save_session=True, 
+            save_path=self.data_root,
+            return_all_data=True
+        )
         print("-"*100)
 
         # self.EndNumberPlusOne = self.data_label["EndNumberPlusOne"]
@@ -400,10 +408,10 @@ class GaitPhasingDataset():
 
         # Assign list of training file names (consist of training and imaging)
         self.trainSubjectList = self.data_label["SessionFileName"]
-        self.trainSubjectList_img = self.data_label["SessionFileName"]
+        self.trainSubjectList_img = self.data_label_img["SessionFileName"]
 
         self.trainSubjectPath = self.data_label["SessionFilePath"]
-        self.trainSubjectPath_img = self.data_label["SessionFilePath"]
+        self.trainSubjectPath_img = self.data_label_img["SessionFilePath"]
 
 
         self.trainName = f"[{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}]"
@@ -418,8 +426,8 @@ class GaitPhasingDataset():
             
             self.pipeline = {
                         "SignalStandardization" : SignalStandardization(
-                            mu=self.meanForPhaseExtraction,
-                            sigma=self.sdForPhaseExtraction,
+                            mu=self.meanForPhaseExtraction[[0, 1]],
+                            sigma=self.sdForPhaseExtraction[[0, 1]],
                             ),
                         "Transformations" : self.trfm,
                         "WindowSlidingWithHeadingRegression": WindowSlidingWithHeadingRegression(
@@ -437,8 +445,8 @@ class GaitPhasingDataset():
             
             self.pipeline = {
                         "SignalStandardization" : SignalStandardization(
-                            mu=self.meanForPhaseExtraction,
-                            sigma=self.sdForPhaseExtraction,
+                            mu=self.meanForPhaseExtraction[[0, 1]],
+                            sigma=self.sdForPhaseExtraction[[0, 1]],
                             ),
                         "WindowSlidingWithHeadingRegression": WindowSlidingWithHeadingRegression(
                             regressWing=self.regressWing,
@@ -464,12 +472,13 @@ class GaitPhasingDataset():
             
         print("Getting Tranining Data with preprocessing ...")
         print("-"*100)
-        self.AllData = self.load_data(self.pipeline)
+        self.AllData = self.load_data(self.pipeline, for_image =False)
+        
         print("Getting Image Visualization Data with preprocessing ...")
-        self.AllData_img = self.load_data(self.img_pipeline)
+        self.AllData_img = self.load_data(self.img_pipeline, for_image =True)
         
 
-    def load_data(self, pipeline):
+    def load_data(self, pipeline,for_image=False):
 
         print("Preprocessing from pipeline ...")
         print("\t->", "\n\t-> ".join(pipeline.keys()))
@@ -484,13 +493,33 @@ class GaitPhasingDataset():
         X_next = []
         self.sessionLengthList = []
         self.srcColorList = []
-
-        for j, filepath in tqdm(enumerate(self.trainSubjectPath), total=len(self.trainSubjectList)):
+        if for_image:
+            data_loading_path = self.trainSubjectPath_img
+            data_loading_length = len(self.trainSubjectList_img)
+        else:
+            data_loading_path = self.trainSubjectPath
+            data_loading_length = len(self.trainSubjectList)
+        for j, filepath in tqdm(enumerate(data_loading_path), total=data_loading_length):
             
             with open(filepath, "rb") as f:
 
                 x = pickle.load(f)["data"].astype(float)
+
+                if  not for_image:
+
+                    x1 = x[0,:]
+
+                   
+                    # x2 = x [2,:]
+                    x2 = x[1, :]
+                    # y_axis = x[1,:]
+                    y_axis = x[2, :]
+                    x = np.concatenate([x1[np.newaxis, ...], x2[np.newaxis, ...]], axis=0)
+
+
+                
                 # print(x.shape)
+                
 
             for process_name, process in pipeline.items():
                
@@ -603,7 +632,9 @@ class GaitPhasingDataset():
         ## dataframe format -> Session -> SubjectNo.
         all_files = sorted(glob(os.path.join(data_dir, "*.pkl")), key=get_order)
         SessionCount = len(all_files)
+        # print(SessionCount)
         EndSessionPlusOne = pd.read_csv(end_session_plus_one_path)["EndSessionPlusOne"].to_list()
+        print(len(EndSessionPlusOne))
 
         session_label_dict = {
 
@@ -635,6 +666,7 @@ class GaitPhasingDataset():
 
                 session_label_dict["SubjectNo"].extend(sess_count)
 
+        session_label_dict["SubjectNo"]
 
         all_data = []
         for session_file_name in sorted(glob(os.path.join(data_dir, "*.pkl")), key=get_order):
@@ -667,7 +699,18 @@ class GaitPhasingDataset():
         mean = np.mean(all_data, axis=-1, keepdims=True)
         std = np.std(all_data, axis=-1, keepdims=True)
 
-        # print(session_label_dict)
+        print(mean[[0, 1]])
+        print(std[[0, 1]])
+
+        print(session_label_dict.keys())
+
+        print("-------")
+
+        for key, value in session_label_dict.items():
+
+            print(value.__len__())
+
+
         session_label_df = pd.DataFrame(session_label_dict)
 
         session_label_df["EndNumberPlusOne"] = session_label_df["SessionLength"].cumsum()
